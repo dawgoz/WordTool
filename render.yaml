@@ -1,0 +1,27 @@
+# Render Blueprint for the WordTool Streamlit app.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Deploy: push this repo to GitHub/GitLab, then in Render click
+# "New +" -> "Blueprint" and point it at the repo. Render reads this file.
+
+services:
+  - type: web
+    name: wordtool
+    runtime: docker
+    plan: starter          # 512 MB RAM is enough; bump if LibreOffice OOMs on large docs
+    region: frankfurt      # Keep EU personal data in the EU (GDPR)
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /_stcore/health
+    envVars:
+      # Streamlit needs to bind to the port Render provides.
+      - key: PORT
+        value: "8501"
+      - key: STREAMLIT_SERVER_HEADLESS
+        value: "true"
+      - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+        value: "false"
+      # Optional shared password. Leave unset to run without auth, or set a value
+      # in the Render dashboard (mark it as a secret) to require a password.
+      - key: APP_PASSWORD
+        sync: false

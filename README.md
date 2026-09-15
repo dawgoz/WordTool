@@ -84,7 +84,11 @@ WordTool/
 ├── pdf_convert.py            # docx → pdf (docx2pdf + LibreOffice fallback)
 ├── make_sample_template.py   # Generates a demo template
 ├── requirements.txt
-└── templates/                # (generated) sample template lives here
+├── templates/                # (generated) sample template lives here
+├── Dockerfile                # Container image for Render / any Docker host
+├── render.yaml               # Render Blueprint (see section 7)
+├── .dockerignore
+└── .streamlit/config.toml    # Server-side Streamlit config (upload cap etc.)
 ```
 
 ## 5. Build a native executable
@@ -138,3 +142,56 @@ For distribution to other users you'll want to sign and notarize the bundle with
 - **macOS: "app is damaged and can't be opened"** – Run `xattr -dr com.apple.quarantine dist/WordTool.app` (see 5.2) or sign & notarize the bundle.
 - **macOS: lots of permission dialogs when clicking generate** – This happens because `docx2pdf` drives Microsoft Word via AppleScript. Install LibreOffice (`brew install --cask libreoffice`) and the prompts go away — the app prefers LibreOffice on macOS. If you want to keep using Word, allow each prompt once, then re-check **System Settings → Privacy & Security → Automation** and → **Files and Folders** to make sure WordTool is ticked.
 - **macOS: PDF conversion fails silently after granting permissions** – The unsigned bundle's identity changes on every build, so macOS may re-evaluate its permissions. Rebuild once, grant the prompts once, or (recommended) sign & notarize with an Apple Developer ID.
+
+## 7. Deploy as a website on Render
+
+The repo ships a container-ready configuration so you can host the Streamlit UI publicly on [Render](https://render.com/). PDF conversion on the server uses **LibreOffice** headless — no Microsoft Word needed.
+
+Files that make this work:
+
+- [Dockerfile](Dockerfile) – Python 3.12 image with `libreoffice-core`, `libreoffice-writer`, Unicode fonts, and the app.
+- [.streamlit/config.toml](.streamlit/config.toml) – headless mode, 10 MB upload cap, CORS/XSRF settings tuned for a reverse proxy.
+- [render.yaml](render.yaml) – Render Blueprint (Docker runtime, Frankfurt region, health check, optional `APP_PASSWORD`).
+- [.dockerignore](.dockerignore) – keeps desktop build artefacts out of the image.
+
+### 7.1 One-time deploy
+
+1. Push this repo to GitHub (or GitLab / Bitbucket).
+2. In Render, click **New +** → **Blueprint** and select the repo. Render reads [render.yaml](render.yaml) and creates the web service.
+3. (Recommended) In the service **Environment** tab, add a secret `APP_PASSWORD` with any value. The app will then require that password before showing the form. Leave it unset if you want the site fully public.
+4. First build takes a few minutes because it installs LibreOffice. Subsequent deploys are cached.
+
+### 7.2 Local Docker smoke test
+
+Before pushing, verify the container builds and serves locally:
+
+```powershell
+# Windows PowerShell
+docker build -t wordtool .
+docker run --rm -p 8501:8501 -e PORT=8501 wordtool
+```
+
+```bash
+# macOS / Linux
+docker build -t wordtool .
+docker run --rm -p 8501:8501 -e PORT=8501 wordtool
+```
+
+Open <http://localhost:8501>. To test the password gate:
+
+```bash
+docker run --rm -p 8501:8501 -e PORT=8501 -e APP_PASSWORD=letmein wordtool
+```
+
+### 7.3 Security & GDPR notes for the hosted site
+
+Read this before putting real customer data through the deployed site:
+
+- **HTTPS is on by default** on Render — uploads and downloads are encrypted end-to-end.
+- **Files are ephemeral.** [app.py](app.py) writes both the uploaded template and generated files into a `tempfile.TemporaryDirectory()` that is deleted at the end of the request. Nothing is persisted unless you attach a Render Disk (don't, unless you also add a retention policy).
+- **Personal data (GDPR).** The order form collects name, address, phone, delivery address — all personal data under EU law. `render.yaml` pins the service to the **Frankfurt** region so data stays in the EU. Sign Render's DPA if you process third-party PII.
+- **Public URL by default.** Add `APP_PASSWORD` (see 7.1) or put the service behind Cloudflare Access / a VPN if the tool is only for internal use.
+- **Template uploads are trusted code.** `docxtpl` renders templates through Jinja2. Only allow trusted users to upload templates — a malicious `.docx` can execute Jinja expressions. If you need to accept templates from untrusted users, replace the `DocxTemplate` render with a sandboxed Jinja environment or ship a fixed built-in template instead of accepting uploads.
+- **Upload size** is capped at 10 MB in [.streamlit/config.toml](.streamlit/config.toml) to reduce abuse.
+- **No shell injection.** `soffice` is invoked via `subprocess.run([...])` with an argument list in [pdf_convert.py](pdf_convert.py) — user input never touches a shell.
+

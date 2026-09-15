@@ -7,6 +7,8 @@ Paleidimas:
 from __future__ import annotations
 
 import base64
+import hmac
+import os
 import tempfile
 from datetime import date as date_cls
 from decimal import Decimal, InvalidOperation
@@ -67,7 +69,41 @@ def parse_price(raw: str, field_label: str) -> Decimal | None:
         return None
 
 
+def _require_password() -> None:
+    """Optional shared-password gate.
+
+    Enabled only when the ``APP_PASSWORD`` environment variable is set (e.g. on
+    Render). If unset, the app runs without authentication — the previous
+    behaviour for local desktop use.
+    """
+    expected = os.environ.get("APP_PASSWORD")
+    if not expected:
+        return
+
+    if st.session_state.get("_auth_ok"):
+        return
+
+    st.title("🔒 Reikalingas slaptažodis")
+    st.caption("Įveskite bendrą prieigos slaptažodį, kad tęstumėte.")
+
+    with st.form("_login_form", clear_on_submit=False):
+        pwd = st.text_input("Slaptažodis", type="password")
+        submitted = st.form_submit_button("Prisijungti")
+
+    if submitted:
+        # `compare_digest` avoids timing side channels on password comparison.
+        if hmac.compare_digest(pwd, expected):
+            st.session_state["_auth_ok"] = True
+            st.rerun()
+        else:
+            st.error("Neteisingas slaptažodis.")
+
+    st.stop()
+
+
 st.set_page_config(page_title="Užsakymo dokumento pildyklė", page_icon="📄")
+
+_require_password()
 
 st.title("📄 Užsakymo dokumento pildyklė")
 st.caption(

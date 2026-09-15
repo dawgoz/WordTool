@@ -1,0 +1,23 @@
+# Streamlit runtime configuration used on the server (Render / Docker).
+#
+# Local dev overrides can go into .streamlit/config.local.toml (git-ignored)
+# or be passed as CLI flags to `streamlit run`.
+
+[server]
+# Render terminates TLS at the edge and proxies plain HTTP to the container,
+# so we bind to all interfaces and let $PORT come from the environment.
+headless = true
+address = "0.0.0.0"
+
+# Cap uploaded template size. 10 MB is generous for a .docx and keeps abuse cheap.
+maxUploadSize = 10
+
+# Render's proxy already sits in front of us; keep CORS/XSRF sane for that setup.
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"

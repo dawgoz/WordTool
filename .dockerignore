@@ -1,0 +1,35 @@
+# Keep the Docker build context small and reproducible.
+.git
+.gitignore
+.github
+.venv
+venv
+env
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Desktop build artefacts (not needed on the server)
+build
+dist
+*.spec
+build_windows.ps1
+build_macos.sh
+run_app.py
+
+# Editor / OS junk
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docs and local-only files
+README.md
+test.html
+requirements-dev.txt
+
+# Local Streamlit secrets must never leak into an image
+.streamlit/secrets.toml
+.streamlit/config.local.toml

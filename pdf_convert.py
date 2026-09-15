@@ -99,8 +99,11 @@ def convert_docx_to_pdf(docx_path: Path, pdf_path: Path) -> Path:
 
     if sys.platform == "darwin":
         backends = (_try_libreoffice, _try_docx2pdf)
-    else:
+    elif sys.platform.startswith("win"):
         backends = (_try_docx2pdf, _try_libreoffice)
+    else:
+        # Linux / server: docx2pdf is not usable (no Word), go straight to LibreOffice.
+        backends = (_try_libreoffice,)
 
     for backend in backends:
         if backend(docx_path, pdf_path):
@@ -115,6 +118,14 @@ def convert_docx_to_pdf(docx_path: Path, pdf_path: Path) -> Path:
             "Alternative: install Microsoft Word for Mac and, when prompted, "
             "allow this app to control Word in "
             "System Settings → Privacy & Security → Automation."
+        )
+
+    if sys.platform.startswith("linux"):
+        raise PdfConversionError(
+            "Could not convert DOCX to PDF. LibreOffice (`soffice`) was not "
+            "found or failed. On the server image install `libreoffice-core` "
+            "and `libreoffice-writer` (already handled by the provided "
+            "Dockerfile)."
         )
 
     raise PdfConversionError(
