@@ -69,41 +69,49 @@ def parse_price(raw: str, field_label: str) -> Decimal | None:
         return None
 
 
-def _require_password() -> None:
-    """Optional shared-password gate.
+def _require_login() -> None:
+    """Username + password login gate.
 
-    Enabled only when the ``APP_PASSWORD`` environment variable is set (e.g. on
-    Render). If unset, the app runs without authentication — the previous
-    behaviour for local desktop use.
+    Credentials default to ``vip`` / ``vipwordtool`` and can be overridden at
+    runtime via ``APP_USERNAME`` / ``APP_PASSWORD`` environment variables
+    (recommended for the Render deployment so the real password is not in
+    source control).
     """
-    expected = os.environ.get("APP_PASSWORD")
-    if not expected:
-        return
+    expected_user = os.environ.get("APP_USERNAME", "vip")
+    expected_pwd = os.environ.get("APP_PASSWORD", "vipwordtool")
 
     if st.session_state.get("_auth_ok"):
         return
 
-    st.title("🔒 Reikalingas slaptažodis")
-    st.caption("Įveskite bendrą prieigos slaptažodį, kad tęstumėte.")
+    st.title("🔒 Prisijungimas")
+    st.caption("Įveskite vartotojo vardą ir slaptažodį, kad tęstumėte.")
 
     with st.form("_login_form", clear_on_submit=False):
+        user = st.text_input("Vartotojo vardas")
         pwd = st.text_input("Slaptažodis", type="password")
         submitted = st.form_submit_button("Prisijungti")
 
     if submitted:
-        # `compare_digest` avoids timing side channels on password comparison.
-        if hmac.compare_digest(pwd, expected):
+        # `compare_digest` avoids timing side channels; check both fields.
+        user_ok = hmac.compare_digest(user, expected_user)
+        pwd_ok = hmac.compare_digest(pwd, expected_pwd)
+        if user_ok and pwd_ok:
             st.session_state["_auth_ok"] = True
             st.rerun()
         else:
-            st.error("Neteisingas slaptažodis.")
+            st.error("Neteisingas vartotojo vardas arba slaptažodis.")
 
     st.stop()
 
 
 st.set_page_config(page_title="Užsakymo dokumento pildyklė", page_icon="📄")
 
-_require_password()
+_require_login()
+
+with st.sidebar:
+    if st.button("Atsijungti"):
+        st.session_state.pop("_auth_ok", None)
+        st.rerun()
 
 st.title("📄 Užsakymo dokumento pildyklė")
 st.caption(
